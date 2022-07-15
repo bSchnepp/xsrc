@@ -1100,6 +1100,9 @@ static int drmOpenByName(const char *name, int type)
     drmVersionPtr version;
     char *        id;
     int           base = drmGetMinorBase(type);
+#ifdef __NetBSD__
+    int           len = strlen(name);
+#endif
 
     if (base < 0)
         return -1;
@@ -1111,7 +1114,11 @@ static int drmOpenByName(const char *name, int type)
     for (i = base; i < base + DRM_MAX_MINOR; i++) {
         if ((fd = drmOpenMinor(i, 1, type)) >= 0) {
             if ((version = drmGetVersion(fd))) {
+#ifdef __linux__
                 if (!strcmp(version->name, name)) {
+#else
+		if (!strncmp(name, version->name, len)) {
+#endif
                     drmFreeVersion(version);
                     id = drmGetBusid(fd);
                     drmMsg("drmGetBusid returned '%s'\n", id ? id : "NULL");
@@ -3629,6 +3636,8 @@ static int drmParseSubsystemType(int maj, int min)
     ret = -EINVAL;
     if (strncmp(buf, "pci:", 4) == 0)
 	ret = DRM_BUS_PCI;
+    else
+        ret = DRM_BUS_PLATFORM;
 
     /* We're done with the bus id.  */
     free(buf);
@@ -4104,6 +4113,7 @@ static void drmFreePlatformDevice(drmDevicePtr device)
 {
     if (device->deviceinfo.platform) {
         if (device->deviceinfo.platform->compatible) {
+#if 0
             char **compatible = device->deviceinfo.platform->compatible;
 
             while (*compatible) {
@@ -4112,6 +4122,7 @@ static void drmFreePlatformDevice(drmDevicePtr device)
             }
 
             free(device->deviceinfo.platform->compatible);
+#endif
         }
     }
 }
@@ -4428,6 +4439,8 @@ static int drmParseOFBusInfo(int maj, int min, char *fullname)
     free(name);
 
     return 0;
+#elif defined(__NetBSD__)
+    return 0;
 #else
 #warning "Missing implementation of drmParseOFBusInfo"
     return -EINVAL;
@@ -4488,6 +4501,13 @@ free:
 
     free(*compatible);
     return err;
+#elif defined(__NetBSD__)
+#if 0
+    *compatible = calloc(2, sizeof(char *));
+    (*compatible)[0] = "device";
+    (*compatible)[1] = NULL;
+#endif
+    return 0;
 #else
 #warning "Missing implementation of drmParseOFDeviceInfo"
     return -EINVAL;
